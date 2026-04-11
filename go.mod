@@ -4,6 +4,7 @@ go 1.26.1
 
 require (
 	github.com/segmentio/kafka-go v0.4.50
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
