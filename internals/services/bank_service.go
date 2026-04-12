@@ -2,14 +2,15 @@ package services
 
 import (
 	"context"
+	"fmt"
 
-	pb "github.com/swastiijain24/bank/internals/gen"
 	"github.com/swastiijain24/bank/internals/kafka"
+	pb "github.com/swastiijain24/bank/internals/pb"
 	"google.golang.org/protobuf/proto"
 )
 
 type BankService interface {
-	ExecuteBankOperation(ctx context.Context, transactionId string, payerAccountId string, payeeAccountId string, amount int64, Type string)
+	ExecuteBankOperation(ctx context.Context, transactionId string, payerAccountId string, payeeAccountId string, amount int64, Type string, bankCode string) error 
 }
 
 type banksvc struct {
@@ -22,7 +23,7 @@ func NewBankService(producer *kafka.Producer) BankService {
 	}
 }
 
-func (s *banksvc) ExecuteBankOperation(ctx context.Context, transactionId string, payerAccountId string, payeeAccountId string, amount int64, Type string) {
+func (s *banksvc) ExecuteBankOperation(ctx context.Context, transactionId string, payerAccountId string, payeeAccountId string, amount int64, Type string, bankCode string) error {
 
 	//the actual txn response returned by bank is this in json
 	//we will use this txn id returned by the bank as the bank refernce id which is there in the bankreponse proto
@@ -38,6 +39,8 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, transactionId string
 	// }
 
 	//if type is credit we will call the credit api of that bank else debit or if anything else like seeing the balance or creating an acc then unknown
+
+	//based on the bank code we will identify which bank to call 
 
 	var bankResponse *pb.BankResponse
 
@@ -82,11 +85,11 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, transactionId string
 
 	data, err := proto.Marshal(bankResponse)
 	if err != nil {
-		return //err
+		return fmt.Errorf("error packing data : %w", err)
 	}
 
 	s.Producer.ProduceEvent(ctx, transactionId, data)
-
+	return nil 
 }
 
 func bankresponse() string {

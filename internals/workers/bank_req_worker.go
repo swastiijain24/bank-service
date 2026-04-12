@@ -2,10 +2,10 @@ package workers
 
 import (
 	"context"
-	"fmt"
+	"log"
 
-	pb "github.com/swastiijain24/bank/internals/gen"
 	"github.com/swastiijain24/bank/internals/kafka"
+	pb "github.com/swastiijain24/bank/internals/pb"
 	"github.com/swastiijain24/bank/internals/services"
 	"google.golang.org/protobuf/proto"
 )
@@ -26,7 +26,7 @@ func (w *BankWorker) Start(ctx context.Context) {
 
 	for {
 
-		msg, err := w.bankConsumer.Reader.ReadMessage(ctx)
+		msg, err := w.bankConsumer.Reader.FetchMessage(ctx)
 		if err != nil {
 			break
 		}
@@ -35,12 +35,18 @@ func (w *BankWorker) Start(ctx context.Context) {
 
 		err = proto.Unmarshal(msg.Value, &bankPayment)
 		if err != nil {
-			fmt.Println("error unpacking message:", err)
+			log.Printf("error unpacking message: %v", err)
 			continue
 		}
 
-		w.bankService.ExecuteBankOperation(ctx, bankPayment.GetTransactionId(), bankPayment.GetPayerAccountId(), bankPayment.GetPayeeAccountId(), bankPayment.GetAmount(), bankPayment.GetType())
+		err = w.bankService.ExecuteBankOperation(ctx, bankPayment.GetTransactionId(), bankPayment.GetPayerAccountId(), bankPayment.GetPayeeAccountId(), bankPayment.GetAmount(), bankPayment.GetType(), bankPayment.GetBankCode())
+		if err != nil {
+			log.Printf("failed to execute bank operation: %v", err)
+		}
 
+		if err := w.bankConsumer.Reader.CommitMessages(ctx, msg); err != nil {
+			log.Printf("failed to commit: %v", err)
+		}
 	}
 
 }
