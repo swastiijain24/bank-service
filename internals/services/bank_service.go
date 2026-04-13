@@ -3,6 +3,9 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
+	"math/rand"
+	"strconv"
 
 	"github.com/swastiijain24/bank/internals/kafka"
 	pb "github.com/swastiijain24/bank/internals/pb"
@@ -42,6 +45,8 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, transactionId string
 
 	//based on the bank code we will identify which bank to call 
 
+	log.Print("received request")
+	log.Print("11")
 	var bankResponse *pb.BankResponse
 
 	switch Type {
@@ -89,9 +94,12 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, transactionId string
 	}
 
 	s.Producer.ProduceEvent(ctx, transactionId, data)
+	
+
+	log.Print("12")
 	return nil 
 }
 
 func bankresponse() string {
-	return ""
+	return "hjfvhfv"+strconv.Itoa(rand.Int())
 }
