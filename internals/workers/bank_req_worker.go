@@ -38,15 +38,21 @@ func (w *BankWorker) Start(ctx context.Context) {
 			log.Printf("error unpacking message: %v", err)
 			continue
 		}
-		log.Print("10")
-		err = w.bankService.ExecuteBankOperation(ctx, bankPayment.GetTransactionId(), bankPayment.GetPayerAccountId(), bankPayment.GetPayeeAccountId(), bankPayment.GetAmount(), bankPayment.GetType(), bankPayment.GetBankCode())
+
+		log.Print("request getting processed by the bank")
+
+		err = w.bankService.ExecuteBankOperation(ctx, &bankPayment)
+
 		if err != nil {
 			log.Printf("failed to execute bank operation: %v", err)
 		}
-		log.Print("13")
+
+		log.Print("executed bank operation")
+
 		if err := w.bankConsumer.Reader.CommitMessages(ctx, msg); err != nil {
 			log.Printf("failed to commit: %v", err)
 		}
+
 	}
 
 }

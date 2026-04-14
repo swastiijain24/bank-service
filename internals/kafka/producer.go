@@ -10,10 +10,9 @@ type Producer struct {
 	writer *kafka.Writer
 }
 
-func NewProducer(address string, topic string) *Producer {
+func NewProducer(address string) *Producer {
 	writer := &kafka.Writer{
 		Addr:         kafka.TCP(address),
-		Topic:        topic,
 		Balancer:     &kafka.Hash{},
 		RequiredAcks: kafka.RequireAll,
 		MaxAttempts:  5,
@@ -26,9 +25,10 @@ func NewProducer(address string, topic string) *Producer {
 	}
 }
 
-func (p *Producer) ProduceEvent(ctx context.Context, key string, value []byte) error {
+func (p *Producer) ProduceEvent(ctx context.Context, key string, value []byte, topic string) error {
 	return p.writer.WriteMessages(ctx, kafka.Message{
 		Key:   []byte(key),
 		Value: value,
+		Topic: topic,
 	})
 }
