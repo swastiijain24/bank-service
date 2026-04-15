@@ -74,3 +74,4 @@ func (w *BankWorker) moveToDLQ(ctx context.Context, msg Kafka.Message, reason st
 		log.Printf("Failed to commit poisoned message: %v", err)
 	}
 }
+
