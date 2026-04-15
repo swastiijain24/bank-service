@@ -35,7 +35,8 @@ func main() {
 	consumer := kafka.NewConsumer([]string{kafkaAddr}, "bank.instruction.v1", "bank-grp")
 	defer consumer.Reader.Close()
 
-	bankWorker := workers.NewBankWorker(consumer, bankSvc)
+	dlqProducer := kafka.NewProducer(kafkaAddr)
+	bankWorker := workers.NewBankWorker(consumer, dlqProducer, bankSvc)
 	statusConsumer := kafka.NewConsumer([]string {kafkaAddr}, "bank.enquiry.v1", "bank-grp2")
 	statusWorker := workers.NewStatusWorker(statusConsumer)
 

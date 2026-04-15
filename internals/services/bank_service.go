@@ -2,8 +2,12 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"net"
+	"os"
+
 	httpclient "github.com/swastiijain24/bank/internals/http_client"
 	"github.com/swastiijain24/bank/internals/kafka"
 	pb "github.com/swastiijain24/bank/internals/pb"
@@ -40,6 +44,12 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, bankRequest *pb.Bank
 		opType = "DEBIT"
 
 		bankRefernceId, status, err := s.bankClient.CallDebit(ctx, bankRequest.TransactionId, bankRequest.PayerAccountId, bankRequest.PayeeAccountId, bankRequest.Amount, bankRequest.GetDebit().Mpin)
+		if err != nil {
+			if isTemporary(err){
+				log.Printf("network timeout for txn %s", err)
+				return nil
+			}
+		}
 		if status == "SUCCESS" {success = true} else {success=false}
 		
 		response := &pb.BankResponse{
@@ -128,4 +138,18 @@ func (s *banksvc) CheckStatus(ctx context.Context, transactionId string) error {
 	}
 	log.Println("transaction status produced")
 	return nil
+}
+
+func isTemporary(err error) bool {
+	if err == nil {return false}
+
+	if errors.Is(err, context.DeadlineExceeded) {return true}
+
+	if os.IsTimeout(err) {return true}
+
+	var netErr net.Error
+	if errors.As(err, &netErr){
+		return netErr.Timeout() 
+	}
+	return false 
 }

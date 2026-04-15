@@ -25,12 +25,13 @@ func (w *StatusWorker) StartStatusWorker(ctx context.Context) {
 		msg, err := w.consumer.Reader.FetchMessage(ctx)
 		if err != nil {
 			fmt.Println("error fetching message:", err)
-			break
+			continue 
 		}
 
 		err = w.bankService.CheckStatus(ctx, string(msg.Key))
 		if err != nil {
 			log.Printf("failed to fetch status : %v", err)
+			continue 
 		}
 
 		if err := w.consumer.Reader.CommitMessages(ctx, msg); err != nil {
