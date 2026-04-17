@@ -34,60 +34,78 @@ func NewBankService(producer *kafka.Producer, redis *repository.RedisStore, bank
 	}
 }
 
+func (s *banksvc) CreateBankResponse(transactionId string, bankRefId string, status string, errMsg string, opType string) *pb.BankResponse {
+	var success bool
+	if status == "SUCCESS" {
+		success = true
+	} else {
+		success = false
+	}
+
+	return &pb.BankResponse{
+		TransactionId:   transactionId,
+		BankReferenceId: bankRefId,
+		Success:         success,
+		ErrorMessage:    errMsg,
+		Type:            opType,
+	}
+}
+
+func (s *banksvc) CheckCache(ctx context.Context, redisKey string, transactionId string) (bool, error) {
+	cachedData, err := s.redis.GetRedisResponse(redisKey)
+	if err != nil {
+		log.Printf("redis error: %v", err)
+		return false, err
+	}
+	if cachedData != nil {
+		return true, s.Producer.ProduceEvent(ctx, transactionId, cachedData, "bank.response.v1")
+	}
+	return false, nil
+}
+
 func (s *banksvc) ExecuteBankOperation(ctx context.Context, bankRequest *pb.BankRequest) error {
 
 	var opType string
-	var success bool 
-	var  bankResponse *pb.BankResponse
+	var redisKey string 
+	var bankResponse *pb.BankResponse
+
 	switch bankRequest.Operation.(type) {
 	case *pb.BankRequest_Debit:
 		opType = "DEBIT"
+		redisKey = "idempotency:"+bankRequest.GetTransactionId()+opType
+		cached, err := s.CheckCache(ctx, redisKey, bankRequest.GetTransactionId())
+		if cached == true {
+			return nil
+		}
 
 		bankRefernceId, status, err := s.bankClient.CallDebit(ctx, bankRequest.TransactionId, bankRequest.PayerAccountId, bankRequest.PayeeAccountId, bankRequest.Amount, bankRequest.GetDebit().Mpin)
 		if err != nil {
-			if isTemporary(err){
+			if isTemporary(err) {
 				log.Printf("network timeout for txn %s", err)
 				return nil
 			}
 		}
-		if status == "SUCCESS" {success = true} else {success=false}
-		
-		response := &pb.BankResponse{
-			TransactionId:   bankRequest.GetTransactionId(),
-			BankReferenceId: bankRefernceId,
-			Success:         success,
-			ErrorMessage:    err.Error(),
-			Type:            opType,
-		}
-
-		bankResponse = response
+		bankResponse = s.CreateBankResponse(bankRequest.GetTransactionId(), bankRefernceId, status, err.Error(), "DEBIT")
 
 	case *pb.BankRequest_Credit:
 		opType = "CREDIT"
-
-		bankRefernceId, status, err := s.bankClient.CallCredit(ctx, bankRequest.TransactionId, bankRequest.PayerAccountId, bankRequest.PayeeAccountId, bankRequest.Amount)
-		if status == "SUCCESS" {success = true} else {success=false}
-		
-		response := &pb.BankResponse{
-			TransactionId:   bankRequest.GetTransactionId(),
-			BankReferenceId: bankRefernceId,
-			Success:         success,
-			ErrorMessage:    err.Error(),
-			Type:            opType,
+		redisKey = "idempotency:"+bankRequest.GetTransactionId()+opType
+		cached, err := s.CheckCache(ctx, redisKey, bankRequest.GetTransactionId())
+		if cached == true {
+			return nil
 		}
-		bankResponse = response
+		bankRefernceId, status, err := s.bankClient.CallRefund(ctx, bankRequest.TransactionId, bankRequest.PayerAccountId, bankRequest.PayeeAccountId, bankRequest.Amount)
+		bankResponse = s.CreateBankResponse(bankRequest.GetTransactionId(), bankRefernceId, status, err.Error(), "CREDIT")
 
-	default:
-		opType = "UNKNOWN"
-	}
-
-	redisKey := "idempotency:" + bankRequest.GetTransactionId() + opType
-	cachedData, err := s.redis.GetRedisResponse(redisKey)
-	if err != nil {
-		log.Printf("redis error: %v", err)
-	}
-	if cachedData != nil {
-		return s.Producer.ProduceEvent(ctx, bankRequest.GetTransactionId(), cachedData, "bank.response.v1")
+	case *pb.BankRequest_Refund:
+		opType = "REFUND"
+		redisKey = "idempotency:"+bankRequest.GetTransactionId()+opType
+		cached, err := s.CheckCache(ctx, redisKey, bankRequest.GetTransactionId())
+		if cached == true {
+			return nil
+		}
+		bankRefernceId, status, err := s.bankClient.CallCredit(ctx, bankRequest.TransactionId, bankRequest.PayerAccountId, bankRequest.PayeeAccountId, bankRequest.Amount)
+		bankResponse = s.CreateBankResponse(bankRequest.GetTransactionId(), bankRefernceId, status, err.Error(), "REFUND")
 	}
 
 	data, err := proto.Marshal(bankResponse)
@@ -117,8 +135,12 @@ func (s *banksvc) CheckStatus(ctx context.Context, transactionId string) error {
 	//call the get status api of the bank where the external id in the core bank model will be this transaction id, based on the response we will set the status, it will return the status and the bank ref id if pending or fail then success = false else true
 	bankReferenceId, status, err := s.bankClient.GetStatusFromBank(ctx, transactionId)
 
-	var success bool 
-	if status == "SUCCESS" {success = true} else {success=false}
+	var success bool
+	if status == "SUCCESS" {
+		success = true
+	} else {
+		success = false
+	}
 
 	bankResponse := &pb.BankResponse{
 		TransactionId:   transactionId,
@@ -141,15 +163,21 @@ func (s *banksvc) CheckStatus(ctx context.Context, transactionId string) error {
 }
 
 func isTemporary(err error) bool {
-	if err == nil {return false}
+	if err == nil {
+		return false
+	}
 
-	if errors.Is(err, context.DeadlineExceeded) {return true}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
 
-	if os.IsTimeout(err) {return true}
+	if os.IsTimeout(err) {
+		return true
+	}
 
 	var netErr net.Error
-	if errors.As(err, &netErr){
-		return netErr.Timeout() 
+	if errors.As(err, &netErr) {
+		return netErr.Timeout()
 	}
-	return false 
+	return false
 }
