@@ -88,10 +88,10 @@ func (c *BankClient) CallCredit(ctx context.Context, transactionId string, payer
 
 func (c *BankClient) CallRefund(ctx context.Context, transactionId string, payerId string, payeeId string, amount int64) (string, string, error) {
 	body, _ := json.Marshal(map[string]interface{}{
-		"external_id":           transactionId,
-		"from_account_id":       payeeId,
-		"to_account_identifier": payerId,
-		"amount":                amount,
+		"from_account_id": payerId,
+		"to_account_id":   payeeId,
+		"amount":          amount,
+		"external_id":     transactionId,
 	})
 	return c.MakeRequest(ctx, transactionId, body, "REFUND")
 }
