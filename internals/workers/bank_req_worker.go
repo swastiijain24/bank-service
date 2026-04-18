@@ -46,7 +46,7 @@ func (w *BankWorker) Start(ctx context.Context) {
 			continue
 		}
 
-		log.Print("request getting processed by the bank")
+		log.Print("request getting processed by the bank 7")
 
 		err = w.bankService.ExecuteBankOperation(ctx, &bankPayment)
 

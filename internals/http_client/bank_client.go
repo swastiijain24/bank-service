@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"strings"
@@ -43,7 +44,9 @@ func (c *BankClient) MakeRequest(ctx context.Context, transactionId string, body
 	req.Header.Set("X-API-Key", os.Getenv("NPCI_API_KEY"))
 
 	resp, err := c.HTTPClient.Do(req)
+	log.Print("made request")
 	if err != nil {
+		log.Print(err)
 		return "", "", err
 	}
 	defer resp.Body.Close()
@@ -54,36 +57,40 @@ func (c *BankClient) MakeRequest(ctx context.Context, transactionId string, body
 
 	var result BankTxnResponse
 	json.NewDecoder(resp.Body).Decode(&result)
-	return result.bankReferenceId, result.status, nil
+	log.Print("debit done 12")
+	log.Print("credit done 22")
+	log.Print(result)
+	return result.BankReferenceID, result.Status, nil
 }
 
 func (c *BankClient) CallDebit(ctx context.Context, transactionId string, payerId string, payeeId string, amount int64, mpinHash string) (string, string, error) {
 	body, _ := json.Marshal(map[string]interface{}{
-		"external_id":           transactionId,
-		"from_account_id":       payerId,
-		"to_account_identifier": payeeId,
-		"amount":                amount,
-		"mpin_hash":             mpinHash,
+		"from_account_id": payerId,
+		"to_account_id":   payeeId,
+		"amount":          amount,
+		"mpin_hash":       mpinHash,
+		"external_id":     transactionId,
 	})
+	log.Print("json req marshaling 9")
 	return c.MakeRequest(ctx, transactionId, body, "DEBIT")
-
 }
 
 func (c *BankClient) CallCredit(ctx context.Context, transactionId string, payerId string, payeeId string, amount int64) (string, string, error) {
 	body, _ := json.Marshal(map[string]interface{}{
-		"external_id":           transactionId,
-		"from_account_id":       payerId,
-		"to_account_identifier": payeeId,
-		"amount":                amount,
+		"from_account_id": payerId,
+		"to_account_id":   payeeId,
+		"amount":          amount,
+		"external_id":     transactionId,
 	})
+	log.Print("marshaled json credit 18")
 	return c.MakeRequest(ctx, transactionId, body, "CREDIT")
 }
 
 func (c *BankClient) CallRefund(ctx context.Context, transactionId string, payerId string, payeeId string, amount int64) (string, string, error) {
 	body, _ := json.Marshal(map[string]interface{}{
 		"external_id":           transactionId,
-		"from_account_id":       payerId,
-		"to_account_identifier": payeeId,
+		"from_account_id":       payeeId,
+		"to_account_identifier": payerId,
 		"amount":                amount,
 	})
 	return c.MakeRequest(ctx, transactionId, body, "REFUND")
@@ -93,7 +100,7 @@ func (c *BankClient) GetStatusFromBank(ctx context.Context, transactionId string
 	url := fmt.Sprintf("%s/transactions/status/%s", c.BaseURL, transactionId)
 
 	body, _ := json.Marshal(map[string]interface{}{
-		"external_id": transactionId,
+		"external_id":      transactionId,
 		"transaction_type": transactionType,
 	})
 
@@ -113,11 +120,11 @@ func (c *BankClient) GetStatusFromBank(ctx context.Context, transactionId string
 
 	var result BankTxnResponse
 	json.NewDecoder(resp.Body).Decode(&result)
-	return result.bankReferenceId, result.status, nil
+	return result.BankReferenceID, result.Status, nil
 }
 
 type BankTxnResponse struct {
-	bankReferenceId string
-	status          string
-	created_at      time.Time
+	BankReferenceID string    `json:"bank_reference_id"`
+	Status          string    `json:"status"`
+	CreatedAt       time.Time `json:"created_at"`
 }

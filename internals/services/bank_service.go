@@ -65,6 +65,7 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, bankRequest *pb.Bank
 
 	switch bankRequest.Operation.(type) {
 	case *pb.BankRequest_Debit:
+		
 		opType = "DEBIT"
 		redisKey = "idempotency:" + bankRequest.GetTransactionId() + opType
 		cached, err := s.CheckCache(ctx, redisKey, bankRequest.GetTransactionId())
@@ -75,6 +76,8 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, bankRequest *pb.Bank
 			return fmt.Errorf("cache error: %w", err)
 		}
 
+		log.Print("calling debit api 8")
+
 		bankRefernceId, status, err := s.bankClient.CallDebit(ctx, bankRequest.TransactionId, bankRequest.PayerAccountId, bankRequest.PayeeAccountId, bankRequest.Amount, bankRequest.GetDebit().Mpin)
 		if err != nil {
 			if isTemporary(err) {
@@ -83,9 +86,11 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, bankRequest *pb.Bank
 			}
 			errMsg = err.Error()
 		}
+		log.Print("debit from main bank done 13")
 		bankResponse = s.CreateBankResponse(bankRequest.GetTransactionId(), bankRefernceId, status, errMsg, "DEBIT")
 
 	case *pb.BankRequest_Credit:
+
 		opType = "CREDIT"
 		redisKey = "idempotency:" + bankRequest.GetTransactionId() + opType
 		cached, err := s.CheckCache(ctx, redisKey, bankRequest.GetTransactionId())
@@ -95,6 +100,7 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, bankRequest *pb.Bank
 		if err != nil {
 			return fmt.Errorf("cache error: %w", err)
 		}
+		log.Print("calling credit api 17")
 		bankRefernceId, status, err := s.bankClient.CallCredit(ctx, bankRequest.TransactionId, bankRequest.PayerAccountId, bankRequest.PayeeAccountId, bankRequest.Amount)
 		if err != nil {
 			if isTemporary(err) {
@@ -103,6 +109,7 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, bankRequest *pb.Bank
 			}
 			errMsg = err.Error()
 		}
+		log.Print("credit done 23")
 		bankResponse = s.CreateBankResponse(bankRequest.GetTransactionId(), bankRefernceId, status, errMsg, "CREDIT")
 
 	case *pb.BankRequest_Refund:
@@ -143,7 +150,8 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, bankRequest *pb.Bank
 		return err
 	}
 
-	log.Print("produced bank response")
+	log.Print("produced bank response 14")
+	log.Print("produced response 24")
 	return nil
 
 }
