@@ -4,19 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
-	"net"
-	"os"
 	httpclient "github.com/swastiijain24/bank/internals/http_client"
 	"github.com/swastiijain24/bank/internals/kafka"
 	pb "github.com/swastiijain24/bank/internals/pb"
 	"github.com/swastiijain24/bank/internals/repository"
 	"google.golang.org/protobuf/proto"
+	"log"
+	"net"
+	"os"
 )
 
 type BankService interface {
 	ExecuteBankOperation(ctx context.Context, bankRequest *pb.BankRequest) error
-	CheckStatus(ctx context.Context, transactionId string, transactionType string ) error
+	CheckStatus(ctx context.Context, transactionId string, transactionType string) error
 }
 
 type banksvc struct {
@@ -34,17 +34,11 @@ func NewBankService(producer *kafka.Producer, redis *repository.RedisStore, bank
 }
 
 func (s *banksvc) CreateBankResponse(transactionId string, bankRefId string, status string, errMsg string, opType string) *pb.BankResponse {
-	var success bool
-	if status == "SUCCESS" {
-		success = true
-	} else {
-		success = false
-	}
 
 	return &pb.BankResponse{
 		TransactionId:   transactionId,
 		BankReferenceId: bankRefId,
-		Success:         success,
+		Success:         (status == "SUCCESS"),
 		ErrorMessage:    errMsg,
 		Type:            opType,
 	}
@@ -65,16 +59,20 @@ func (s *banksvc) CheckCache(ctx context.Context, redisKey string, transactionId
 func (s *banksvc) ExecuteBankOperation(ctx context.Context, bankRequest *pb.BankRequest) error {
 
 	var opType string
-	var redisKey string 
+	var redisKey string
+	errMsg := ""
 	var bankResponse *pb.BankResponse
 
 	switch bankRequest.Operation.(type) {
 	case *pb.BankRequest_Debit:
 		opType = "DEBIT"
-		redisKey = "idempotency:"+bankRequest.GetTransactionId()+opType
+		redisKey = "idempotency:" + bankRequest.GetTransactionId() + opType
 		cached, err := s.CheckCache(ctx, redisKey, bankRequest.GetTransactionId())
 		if cached == true {
 			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("cache error: %w", err)
 		}
 
 		bankRefernceId, status, err := s.bankClient.CallDebit(ctx, bankRequest.TransactionId, bankRequest.PayerAccountId, bankRequest.PayeeAccountId, bankRequest.Amount, bankRequest.GetDebit().Mpin)
@@ -83,15 +81,19 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, bankRequest *pb.Bank
 				log.Printf("network timeout for txn %s", err)
 				return nil
 			}
+			errMsg = err.Error()
 		}
-		bankResponse = s.CreateBankResponse(bankRequest.GetTransactionId(), bankRefernceId, status, err.Error(), "DEBIT")
+		bankResponse = s.CreateBankResponse(bankRequest.GetTransactionId(), bankRefernceId, status, errMsg, "DEBIT")
 
 	case *pb.BankRequest_Credit:
 		opType = "CREDIT"
-		redisKey = "idempotency:"+bankRequest.GetTransactionId()+opType
+		redisKey = "idempotency:" + bankRequest.GetTransactionId() + opType
 		cached, err := s.CheckCache(ctx, redisKey, bankRequest.GetTransactionId())
 		if cached == true {
 			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("cache error: %w", err)
 		}
 		bankRefernceId, status, err := s.bankClient.CallCredit(ctx, bankRequest.TransactionId, bankRequest.PayerAccountId, bankRequest.PayeeAccountId, bankRequest.Amount)
 		if err != nil {
@@ -99,15 +101,19 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, bankRequest *pb.Bank
 				log.Printf("network timeout for txn %s", err)
 				return nil
 			}
+			errMsg = err.Error()
 		}
-		bankResponse = s.CreateBankResponse(bankRequest.GetTransactionId(), bankRefernceId, status, err.Error(), "CREDIT")
+		bankResponse = s.CreateBankResponse(bankRequest.GetTransactionId(), bankRefernceId, status, errMsg, "CREDIT")
 
 	case *pb.BankRequest_Refund:
 		opType = "REFUND"
-		redisKey = "idempotency:"+bankRequest.GetTransactionId()+opType
+		redisKey = "idempotency:" + bankRequest.GetTransactionId() + opType
 		cached, err := s.CheckCache(ctx, redisKey, bankRequest.GetTransactionId())
 		if cached == true {
 			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("cache error: %w", err)
 		}
 		bankRefernceId, status, err := s.bankClient.CallRefund(ctx, bankRequest.TransactionId, bankRequest.PayerAccountId, bankRequest.PayeeAccountId, bankRequest.Amount)
 		if err != nil {
@@ -115,8 +121,9 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, bankRequest *pb.Bank
 				log.Printf("network timeout for txn %s", err)
 				return nil
 			}
+			errMsg = err.Error()
 		}
-		bankResponse = s.CreateBankResponse(bankRequest.GetTransactionId(), bankRefernceId, status, err.Error(), "REFUND")
+		bankResponse = s.CreateBankResponse(bankRequest.GetTransactionId(), bankRefernceId, status, errMsg, "REFUND")
 	}
 
 	data, err := proto.Marshal(bankResponse)
@@ -145,19 +152,17 @@ func (s *banksvc) CheckStatus(ctx context.Context, transactionId string, transac
 
 	//call the get status api of the bank where the external id in the core bank model will be this transaction id, based on the response we will set the status, it will return the status and the bank ref id if pending or fail then success = false else true
 	bankReferenceId, status, err := s.bankClient.GetStatusFromBank(ctx, transactionId, transactionType)
-
-	var success bool
-	if status == "SUCCESS" {
-		success = true
-	} else {
-		success = false
+	errMsg := ""
+	if err != nil {
+		errMsg = err.Error()
 	}
 
 	bankResponse := &pb.BankResponse{
 		TransactionId:   transactionId,
 		BankReferenceId: bankReferenceId,
-		Success:         success,
-		ErrorMessage:    err.Error(),
+		Success:         (status == "SUCCESS"),
+		ErrorMessage:    errMsg,
+		Type:            transactionType,
 	}
 
 	data, err := proto.Marshal(bankResponse)

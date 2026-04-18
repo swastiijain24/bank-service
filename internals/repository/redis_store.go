@@ -39,7 +39,6 @@ func (s *RedisStore) GetRedisResponse(key string) ([]byte, error) {
 	return data, nil
 }
 
-
 func (s *RedisStore) SetRedisResponse(key string, data []byte) error {
 	ctx := context.Background()
 	ok, err := s.redisClient.SetArgs(ctx, key, "processing", redis.SetArgs{
@@ -47,11 +46,11 @@ func (s *RedisStore) SetRedisResponse(key string, data []byte) error {
 		TTL:  5 * time.Minute,
 	}).Result()
 	if err != nil {
-		return  fmt.Errorf("error setting to redis: %s" , err)
+		return fmt.Errorf("error setting to redis: %s", err)
 	}
 
 	if ok == "OK" {
 		return s.redisClient.Set(ctx, key, data, s.ttl).Err()
-	} 
-	return nil 
+	}
+	return nil
 }

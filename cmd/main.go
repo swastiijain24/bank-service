@@ -38,7 +38,7 @@ func main() {
 	dlqProducer := kafka.NewProducer(kafkaAddr)
 	bankWorker := workers.NewBankWorker(consumer, dlqProducer, bankSvc)
 	statusConsumer := kafka.NewConsumer([]string {kafkaAddr}, "bank.enquiry.v1", "bank-grp2")
-	statusWorker := workers.NewStatusWorker(statusConsumer)
+	statusWorker := workers.NewStatusWorker(statusConsumer, bankSvc)
 
 	log.Println("Bank Service Worker started...")
 	go bankWorker.Start(ctx)

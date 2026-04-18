@@ -2,7 +2,6 @@ package workers
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"github.com/swastiijain24/bank/internals/kafka"
@@ -14,9 +13,10 @@ type StatusWorker struct {
 	bankService services.BankService
 }
 
-func NewStatusWorker(consumer *kafka.Consumer) *StatusWorker {
+func NewStatusWorker(consumer *kafka.Consumer, bankService services.BankService) *StatusWorker {
 	return &StatusWorker{
 		consumer: consumer,
+		bankService: bankService,
 	}
 }
 
@@ -24,8 +24,11 @@ func (w *StatusWorker) StartStatusWorker(ctx context.Context) {
 	for {
 		msg, err := w.consumer.Reader.FetchMessage(ctx)
 		if err != nil {
-			fmt.Println("error fetching message:", err)
-			continue 
+			if ctx.Err() != nil {
+				return
+			}
+			log.Printf("Fetch error: %v", err)
+			continue
 		}
 
 		err = w.bankService.CheckStatus(ctx, string(msg.Key), string(msg.Value))

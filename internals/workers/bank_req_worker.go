@@ -30,7 +30,10 @@ func (w *BankWorker) Start(ctx context.Context) {
 
 		msg, err := w.bankConsumer.Reader.FetchMessage(ctx)
 		if err != nil {
-			log.Printf("error fetching message: %v", err)
+			if ctx.Err() != nil {
+				return
+			}
+			log.Printf("Fetch error: %v", err)
 			continue
 		}
 

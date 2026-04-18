@@ -19,7 +19,7 @@ type BankClient struct {
 
 func NewBankClient(url string) *BankClient {
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: true, //must set to false in production
 	}
 
 	transport := &http.Transport{
