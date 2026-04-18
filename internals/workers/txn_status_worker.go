@@ -28,7 +28,7 @@ func (w *StatusWorker) StartStatusWorker(ctx context.Context) {
 			continue 
 		}
 
-		err = w.bankService.CheckStatus(ctx, string(msg.Key))
+		err = w.bankService.CheckStatus(ctx, string(msg.Key), string(msg.Value))
 		if err != nil {
 			log.Printf("failed to fetch status : %v", err)
 			continue 

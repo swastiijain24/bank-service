@@ -89,11 +89,12 @@ func (c *BankClient) CallRefund(ctx context.Context, transactionId string, payer
 	return c.MakeRequest(ctx, transactionId, body, "REFUND")
 }
 
-func (c *BankClient) GetStatusFromBank(ctx context.Context, transactionId string) (string, string, error) {
+func (c *BankClient) GetStatusFromBank(ctx context.Context, transactionId string, transactionType string) (string, string, error) {
 	url := fmt.Sprintf("%s/transactions/status/%s", c.BaseURL, transactionId)
 
 	body, _ := json.Marshal(map[string]interface{}{
 		"external_id": transactionId,
+		"transaction_type": transactionType,
 	})
 
 	req, _ := http.NewRequestWithContext(ctx, "GET", url, bytes.NewBuffer(body))

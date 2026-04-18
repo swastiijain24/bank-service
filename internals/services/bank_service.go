@@ -7,7 +7,6 @@ import (
 	"log"
 	"net"
 	"os"
-
 	httpclient "github.com/swastiijain24/bank/internals/http_client"
 	"github.com/swastiijain24/bank/internals/kafka"
 	pb "github.com/swastiijain24/bank/internals/pb"
@@ -17,7 +16,7 @@ import (
 
 type BankService interface {
 	ExecuteBankOperation(ctx context.Context, bankRequest *pb.BankRequest) error
-	CheckStatus(ctx context.Context, transactionId string) error
+	CheckStatus(ctx context.Context, transactionId string, transactionType string ) error
 }
 
 type banksvc struct {
@@ -94,7 +93,13 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, bankRequest *pb.Bank
 		if cached == true {
 			return nil
 		}
-		bankRefernceId, status, err := s.bankClient.CallRefund(ctx, bankRequest.TransactionId, bankRequest.PayerAccountId, bankRequest.PayeeAccountId, bankRequest.Amount)
+		bankRefernceId, status, err := s.bankClient.CallCredit(ctx, bankRequest.TransactionId, bankRequest.PayerAccountId, bankRequest.PayeeAccountId, bankRequest.Amount)
+		if err != nil {
+			if isTemporary(err) {
+				log.Printf("network timeout for txn %s", err)
+				return nil
+			}
+		}
 		bankResponse = s.CreateBankResponse(bankRequest.GetTransactionId(), bankRefernceId, status, err.Error(), "CREDIT")
 
 	case *pb.BankRequest_Refund:
@@ -104,7 +109,13 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, bankRequest *pb.Bank
 		if cached == true {
 			return nil
 		}
-		bankRefernceId, status, err := s.bankClient.CallCredit(ctx, bankRequest.TransactionId, bankRequest.PayerAccountId, bankRequest.PayeeAccountId, bankRequest.Amount)
+		bankRefernceId, status, err := s.bankClient.CallRefund(ctx, bankRequest.TransactionId, bankRequest.PayerAccountId, bankRequest.PayeeAccountId, bankRequest.Amount)
+		if err != nil {
+			if isTemporary(err) {
+				log.Printf("network timeout for txn %s", err)
+				return nil
+			}
+		}
 		bankResponse = s.CreateBankResponse(bankRequest.GetTransactionId(), bankRefernceId, status, err.Error(), "REFUND")
 	}
 
@@ -130,10 +141,10 @@ func (s *banksvc) ExecuteBankOperation(ctx context.Context, bankRequest *pb.Bank
 
 }
 
-func (s *banksvc) CheckStatus(ctx context.Context, transactionId string) error {
+func (s *banksvc) CheckStatus(ctx context.Context, transactionId string, transactionType string) error {
 
 	//call the get status api of the bank where the external id in the core bank model will be this transaction id, based on the response we will set the status, it will return the status and the bank ref id if pending or fail then success = false else true
-	bankReferenceId, status, err := s.bankClient.GetStatusFromBank(ctx, transactionId)
+	bankReferenceId, status, err := s.bankClient.GetStatusFromBank(ctx, transactionId, transactionType)
 
 	var success bool
 	if status == "SUCCESS" {
