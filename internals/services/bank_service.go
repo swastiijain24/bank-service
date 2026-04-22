@@ -22,10 +22,10 @@ type BankService interface {
 type banksvc struct {
 	Producer   *kafka.Producer
 	redis      *repository.RedisStore
-	bankClient *httpclient.BankClient
+	bankClient httpclient.HttpClient
 }
 
-func NewBankService(producer *kafka.Producer, redis *repository.RedisStore, bankClient *httpclient.BankClient) BankService {
+func NewBankService(producer *kafka.Producer, redis *repository.RedisStore, bankClient httpclient.HttpClient) BankService {
 	return &banksvc{
 		Producer:   producer,
 		redis:      redis,

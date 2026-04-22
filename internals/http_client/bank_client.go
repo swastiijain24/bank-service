@@ -13,12 +13,20 @@ import (
 	"time"
 )
 
+type HttpClient interface {
+	MakeRequest(ctx context.Context, transactionId string, body []byte, opType string) (string, string, error)
+	CallDebit(ctx context.Context, transactionId string, payerId string, payeeId string, amount int64, mpinHash string) (string, string, error)
+	CallCredit(ctx context.Context, transactionId string, payerId string, payeeId string, amount int64) (string, string, error)
+	CallRefund(ctx context.Context, transactionId string, payerId string, payeeId string, amount int64) (string, string, error)
+	GetStatusFromBank(ctx context.Context, transactionId string, transactionType string) (string, string, error)
+}
+
 type BankClient struct {
 	BaseURL    string
 	HTTPClient *http.Client
 }
 
-func NewBankClient(url string) *BankClient {
+func NewBankClient(url string) HttpClient {
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: true, //must set to false in production
 	}
