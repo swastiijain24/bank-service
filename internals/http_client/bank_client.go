@@ -19,6 +19,10 @@ type HttpClient interface {
 	CallCredit(ctx context.Context, transactionId string, payerId string, payeeId string, amount int64) (string, string, error)
 	CallRefund(ctx context.Context, transactionId string, payerId string, payeeId string, amount int64) (string, string, error)
 	GetStatusFromBank(ctx context.Context, transactionId string, transactionType string) (string, string, error)
+	DiscoverAccounts(ctx context.Context, phone string, ) ([]string, error)
+	SetMpin(ctx context.Context, accountId string, mpinEn string) error
+	ChangeMpin(ctx context.Context, accountId string,  oldMpinEn string, newMpinEn string) error
+	GetBalance(ctx context.Context, accountId string,  mpinEn string) (int64, error)
 }
 
 type BankClient struct {
@@ -129,6 +133,87 @@ func (c *BankClient) GetStatusFromBank(ctx context.Context, transactionId string
 	var result BankTxnResponse
 	json.NewDecoder(resp.Body).Decode(&result)
 	return result.BankReferenceID, result.Status, nil
+}
+
+func (c *BankClient) DiscoverAccounts(ctx context.Context, phone string, ) ([]string, error) {
+	body, _ := json.Marshal(map[string]interface{}{
+		"phone":     phone,
+	})
+
+	url := fmt.Sprintf("%s/accounts/discover", c.BaseURL)
+	req, _ := http.NewRequestWithContext(ctx, "GET", url, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return []string{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return []string{}, fmt.Errorf("bank returned error :%d", resp.StatusCode)
+	}
+
+	var result []string
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result, nil
+}
+
+func (c *BankClient) SetMpin(ctx context.Context, accountId string, mpinEn string) error {
+	body, _ := json.Marshal(map[string]interface{}{
+		"mpin_encrypted":mpinEn,
+	})
+
+	url := fmt.Sprintf("%s/accounts/mpin/%s", c.BaseURL, accountId)
+	req, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	_, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	return nil 
+}
+
+func (c *BankClient) ChangeMpin(ctx context.Context, accountId string, oldMpinEn string, newMpinEn string) error {
+	body, _ := json.Marshal(map[string]interface{}{
+		"old_mpin_encrypted":oldMpinEn,
+		"new_mpin_encrypted":newMpinEn,
+	})
+
+	url := fmt.Sprintf("%s/account/mpin/%s", c.BaseURL, accountId)
+	req, _ := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	_, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	return nil 
+}
+
+func (c *BankClient) GetBalance(ctx context.Context, accountId string, mpinEn string) (int64, error) {
+	body, _ := json.Marshal(map[string]interface{}{
+		"mpin_encrypted":mpinEn,
+	})
+
+	url := fmt.Sprintf("%s/account/balance/%s", c.BaseURL, accountId)
+	req, _ := http.NewRequestWithContext(ctx, "GET", url, bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return 0,  err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("bank returned error :%d", resp.StatusCode)
+	}
+
+	var result int64
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result, nil
 }
 
 type BankTxnResponse struct {
