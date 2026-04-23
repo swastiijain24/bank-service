@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -46,15 +47,35 @@ func main() {
 	statusWorker := workers.NewStatusWorker(statusConsumer, bankSvc)
 
 	accountService := services.NewAccountService(bankClient)
-	accountHandler := handlers.NewaccountHandler(accountService)
+	accountHandler := handlers.NewAccountHandler(accountService)
 	routes.RegisterAccountRoutes(r, accountHandler)
 
 	log.Println("Bank Service Worker started...")
 	go bankWorker.Start(ctx)
 	go statusWorker.StartStatusWorker(ctx)
+
+	port := os.Getenv("PORT")
+
+	srv := &http.Server{
+		Addr: ":" + port,
+		Handler: r,
+	}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen %s\n", err)
+		}
+	}()
+
 	<-ctx.Done()
 
-	r.Run(":" + os.Getenv("PORT"))
-	log.Println("Shutting down...")
+	log.Println("Shutdown signal received...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Fatal("server forced to shutdown:", err)
+	}
 
 }

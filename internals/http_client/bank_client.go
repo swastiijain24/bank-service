@@ -19,10 +19,10 @@ type HttpClient interface {
 	CallCredit(ctx context.Context, transactionId string, payerId string, payeeId string, amount int64) (string, string, error)
 	CallRefund(ctx context.Context, transactionId string, payerId string, payeeId string, amount int64) (string, string, error)
 	GetStatusFromBank(ctx context.Context, transactionId string, transactionType string) (string, string, error)
-	DiscoverAccounts(ctx context.Context, phone string, ) ([]string, error)
+	DiscoverAccounts(ctx context.Context, phone string) ([]string, error)
 	SetMpin(ctx context.Context, accountId string, mpinEn string) error
-	ChangeMpin(ctx context.Context, accountId string,  oldMpinEn string, newMpinEn string) error
-	GetBalance(ctx context.Context, accountId string,  mpinEn string) (int64, error)
+	ChangeMpin(ctx context.Context, accountId string, oldMpinEn string, newMpinEn string) error
+	GetBalance(ctx context.Context, accountId string, mpinEn string) (int64, error)
 }
 
 type BankClient struct {
@@ -31,8 +31,9 @@ type BankClient struct {
 }
 
 func NewBankClient(url string) HttpClient {
+	allowInsecureTLS := os.Getenv("ALLOW_INSECURE_TLS") == "true"
 	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true, //must set to false in production
+		InsecureSkipVerify: allowInsecureTLS,
 	}
 
 	transport := &http.Transport{
@@ -116,7 +117,7 @@ func (c *BankClient) GetStatusFromBank(ctx context.Context, transactionId string
 		"transaction_type": transactionType,
 	})
 
-	req, _ := http.NewRequestWithContext(ctx, "GET", url, bytes.NewBuffer(body))
+	req, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Key", os.Getenv("NPCI_API_KEY"))
 
@@ -135,13 +136,13 @@ func (c *BankClient) GetStatusFromBank(ctx context.Context, transactionId string
 	return result.BankReferenceID, result.Status, nil
 }
 
-func (c *BankClient) DiscoverAccounts(ctx context.Context, phone string, ) ([]string, error) {
+func (c *BankClient) DiscoverAccounts(ctx context.Context, phone string) ([]string, error) {
 	body, _ := json.Marshal(map[string]interface{}{
-		"phone":     phone,
+		"phone": phone,
 	})
 
 	url := fmt.Sprintf("%s/accounts/discover", c.BaseURL)
-	req, _ := http.NewRequestWithContext(ctx, "GET", url, bytes.NewBuffer(body))
+	req, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Key", os.Getenv("NPCI_API_KEY"))
 
@@ -162,7 +163,7 @@ func (c *BankClient) DiscoverAccounts(ctx context.Context, phone string, ) ([]st
 
 func (c *BankClient) SetMpin(ctx context.Context, accountId string, mpinEn string) error {
 	body, _ := json.Marshal(map[string]interface{}{
-		"mpin_encrypted":mpinEn,
+		"mpin_encrypted": mpinEn,
 	})
 
 	url := fmt.Sprintf("%s/accounts/mpin/%s", c.BaseURL, accountId)
@@ -170,17 +171,22 @@ func (c *BankClient) SetMpin(ctx context.Context, accountId string, mpinEn strin
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Key", os.Getenv("NPCI_API_KEY"))
 
-	_, err := c.HTTPClient.Do(req)
+	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
-	return nil 
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("bank returned error :%d", resp.StatusCode)
+	}
+	return nil
 }
 
 func (c *BankClient) ChangeMpin(ctx context.Context, accountId string, oldMpinEn string, newMpinEn string) error {
 	body, _ := json.Marshal(map[string]interface{}{
-		"old_mpin_encrypted":oldMpinEn,
-		"new_mpin_encrypted":newMpinEn,
+		"old_mpin_encrypted": oldMpinEn,
+		"new_mpin_encrypted": newMpinEn,
 	})
 
 	url := fmt.Sprintf("%s/account/mpin/%s", c.BaseURL, accountId)
@@ -188,26 +194,31 @@ func (c *BankClient) ChangeMpin(ctx context.Context, accountId string, oldMpinEn
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Key", os.Getenv("NPCI_API_KEY"))
 
-	_, err := c.HTTPClient.Do(req)
+	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
 		return err
 	}
-	return nil 
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("bank returned error :%d", resp.StatusCode)
+	}
+	return nil
 }
 
 func (c *BankClient) GetBalance(ctx context.Context, accountId string, mpinEn string) (int64, error) {
 	body, _ := json.Marshal(map[string]interface{}{
-		"mpin_encrypted":mpinEn,
+		"mpin_encrypted": mpinEn,
 	})
 
 	url := fmt.Sprintf("%s/account/balance/%s", c.BaseURL, accountId)
-	req, _ := http.NewRequestWithContext(ctx, "GET", url, bytes.NewBuffer(body))
+	req, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-API-Key", os.Getenv("NPCI_API_KEY"))
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
-		return 0,  err
+		return 0, err
 	}
 	defer resp.Body.Close()
 
