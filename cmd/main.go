@@ -54,6 +54,7 @@ func main() {
 	go statusWorker.StartStatusWorker(ctx)
 	<-ctx.Done()
 
+	r.Run(":" + os.Getenv("PORT"))
 	log.Println("Shutting down...")
 
 }

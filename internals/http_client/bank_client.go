@@ -143,6 +143,7 @@ func (c *BankClient) DiscoverAccounts(ctx context.Context, phone string, ) ([]st
 	url := fmt.Sprintf("%s/accounts/discover", c.BaseURL)
 	req, _ := http.NewRequestWithContext(ctx, "GET", url, bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", os.Getenv("NPCI_API_KEY"))
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -167,6 +168,7 @@ func (c *BankClient) SetMpin(ctx context.Context, accountId string, mpinEn strin
 	url := fmt.Sprintf("%s/accounts/mpin/%s", c.BaseURL, accountId)
 	req, _ := http.NewRequestWithContext(ctx, "POST", url, bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", os.Getenv("NPCI_API_KEY"))
 
 	_, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -184,6 +186,7 @@ func (c *BankClient) ChangeMpin(ctx context.Context, accountId string, oldMpinEn
 	url := fmt.Sprintf("%s/account/mpin/%s", c.BaseURL, accountId)
 	req, _ := http.NewRequestWithContext(ctx, "PUT", url, bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", os.Getenv("NPCI_API_KEY"))
 
 	_, err := c.HTTPClient.Do(req)
 	if err != nil {
@@ -200,6 +203,7 @@ func (c *BankClient) GetBalance(ctx context.Context, accountId string, mpinEn st
 	url := fmt.Sprintf("%s/account/balance/%s", c.BaseURL, accountId)
 	req, _ := http.NewRequestWithContext(ctx, "GET", url, bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", os.Getenv("NPCI_API_KEY"))
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {
